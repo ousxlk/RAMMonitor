@@ -21,6 +21,7 @@ WARNING = "#F6C66A"
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+psapi = ctypes.WinDLL("psapi", use_last_error=True)
 HWND = wintypes.HWND
 
 user32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
@@ -45,8 +46,8 @@ user32.SetWindowPos.argtypes = [
 ]
 user32.SetWindowPos.restype = wintypes.BOOL
 kernel32.GetCurrentProcess.restype = wintypes.HANDLE
-user32.EmptyWorkingSet.argtypes = [wintypes.HANDLE]
-user32.EmptyWorkingSet.restype = wintypes.BOOL
+psapi.EmptyWorkingSet.argtypes = [wintypes.HANDLE]
+psapi.EmptyWorkingSet.restype = wintypes.BOOL
 
 GWL_STYLE = -16
 WS_CHILD, WS_POPUP, WS_VISIBLE = 0x40000000, 0x80000000, 0x10000000
@@ -327,7 +328,7 @@ class DesktopMonitor:
         try:
             gc.collect()
             handle = kernel32.GetCurrentProcess()
-            trimmed = bool(user32.EmptyWorkingSet(handle))
+            trimmed = bool(psapi.EmptyWorkingSet(handle))
             self.refresh()
             if trimmed:
                 self.set_status("Widget memory trimmed • Windows manages system RAM")
