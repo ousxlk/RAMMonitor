@@ -1,14 +1,21 @@
-# RAM Monitor for Windows
+# RAM Monitor Desktop Widget
 
-This repository builds the supplied RAM Monitor Python desktop app into a standalone Windows executable using GitHub Actions. Python is installed only on GitHub's Windows build runner; it is not required on your PC.
+A lightweight Windows desktop-layer widget. It is attached to the Windows desktop WorkerW surface, so it stays on the wallpaper layer behind normal application windows instead of floating above them.
 
-## Get the EXE
-1. Open the **Actions** tab.
-2. Select **Build RAM Monitor for Windows**.
-3. Click **Run workflow** and wait for the run to finish.
-4. Open the completed run and download the **RAMMonitor-Windows** artifact.
-5. Extract the artifact ZIP and run RAMMonitor.exe.
+## Build
+GitHub Actions builds a portable Windows x64 executable:
+1. Open **Actions**.
+2. Select **Build RAM Monitor Desktop Widget**.
+3. Run the workflow.
+4. Download the **RAMMonitor-Desktop-Widget-Windows-x64** artifact.
 
-The source archive is stored as base64 text in `RAMMonitor-source.zip.b64`; the workflow decodes it on the runner before building.
+No Python installation is needed on the target PC.
 
-Note: Some system-wide memory operations require Administrator privileges. Windows manages memory automatically; clearing caches may temporarily reduce performance.
+## Features
+- RAM used, total RAM, and available RAM
+- CPU usage
+- Compact translucent desktop display
+- Updates every 2 seconds
+- Right-click menu to refresh or exit
+
+The widget is positioned at the top-left desktop area by default. Change X and Y near the top of `ram_monitor_desktop.py` to reposition it.
