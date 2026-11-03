@@ -89,7 +89,9 @@ def find_desktop_layer():
     def enum_callback(hwnd, _):
         view = user32.FindWindowExW(hwnd, None, "SHELLDLL_DefView", None)
         if view:
-            found[0] = user32.GetWindow(hwnd, GW_HWNDNEXT)
+            # Parent to the desktop icon view, not the WorkerW behind it.
+            # This allows mouse interaction while app windows cover the widget.
+            found[0] = view
             return False
         return True
 
@@ -290,7 +292,7 @@ class DesktopMonitor:
         )
         user32.SetWindowPos(
             hwnd, None, self.position[0], self.position[1], WIDTH, HEIGHT,
-            SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED
+            SWP_NOACTIVATE | SWP_FRAMECHANGED
         )
 
     def redraw_bar(self):
