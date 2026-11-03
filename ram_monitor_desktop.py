@@ -105,7 +105,7 @@ class DesktopMonitor:
         self.root.title("RAM Monitor")
         self.root.overrideredirect(True)
         self.root.configure(bg=BG)
-        self.root.attributes("-alpha", 0.97)
+        self.root.attributes("-alpha", 0.90)
         self.root.geometry(f"{WIDTH}x{HEIGHT}+{X}+{Y}")
         self.root.resizable(False, False)
         self.position = [X, Y]
