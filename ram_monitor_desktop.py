@@ -13,6 +13,11 @@ ACCENT = "#54D6A0"
 BAR_BG = "#293844"
 
 user32 = ctypes.windll.user32
+# Explicit pointer-sized return types are required on 64-bit Windows.
+user32.FindWindowW.restype = ctypes.c_void_p
+user32.FindWindowExW.restype = ctypes.c_void_p
+user32.GetWindow.restype = ctypes.c_void_p
+user32.SetParent.restype = ctypes.c_void_p
 GWL_STYLE = -16
 WS_CHILD = 0x40000000
 WS_POPUP = 0x80000000
