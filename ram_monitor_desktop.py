@@ -156,7 +156,7 @@ class DesktopMonitor:
             bd=0, relief="flat"
         )
         self.ram_bar.pack(fill="x")
-        self.ram_bar.bind("<Configure>", lambda _e: self.refresh())
+        self.ram_bar.bind("<Configure>", lambda _e: self.root.after_idle(self.redraw_bar))
 
         stats = tk.Frame(body, bg=BG)
         stats.pack(fill="x", pady=(10, 10))
@@ -270,6 +270,12 @@ class DesktopMonitor:
             hwnd, None, self.position[0], self.position[1], WIDTH, HEIGHT,
             SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED
         )
+
+    def redraw_bar(self):
+        try:
+            self.draw_bar(psutil.virtual_memory().percent)
+        except (psutil.Error, tk.TclError):
+            pass
 
     def draw_bar(self, percent):
         self.ram_bar.delete("all")
