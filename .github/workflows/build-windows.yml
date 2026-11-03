@@ -22,7 +22,7 @@ jobs:
       - name: Extract widget project
         shell: pwsh
         run: |
-          $encoded = (Get-Content -Raw "RAMMonitorWidget-source.zip.b64").Trim()
+          $encoded = [regex]::Replace((Get-Content -Raw "RAMMonitorWidget-source.zip.b64"), "[^A-Za-z0-9+/=]", "").Trim()
           $bytes = [Convert]::FromBase64String($encoded)
           [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\widget.zip", $bytes)
           Expand-Archive "$env:RUNNER_TEMP\widget.zip" -DestinationPath "$env:GITHUB_WORKSPACE\source" -Force
