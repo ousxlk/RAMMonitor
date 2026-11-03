@@ -1,44 +1,69 @@
 import ctypes
 import tkinter as tk
-from tkinter import ttk
+from ctypes import wintypes
 import psutil
-import time
 
-# Desktop position (pixels from the top-left of the primary monitor).
+# Desktop position, measured from the top-left corner of the primary display.
 X, Y = 34, 90
-BG = "#101820"
-FG = "#F2F6FA"
-MUTED = "#9EADB9"
-ACCENT = "#54D6A0"
-BAR_BG = "#293844"
+WIDTH, HEIGHT = 286, 196
+BG, FG = "#101820", "#F2F6FA"
+MUTED, ACCENT, BAR_BG = "#9EADB9", "#54D6A0", "#293844"
 
-user32 = ctypes.windll.user32
-# Explicit pointer-sized return types are required on 64-bit Windows.
-user32.FindWindowW.restype = ctypes.c_void_p
-user32.FindWindowExW.restype = ctypes.c_void_p
-user32.GetWindow.restype = ctypes.c_void_p
-user32.SetParent.restype = ctypes.c_void_p
+user32 = ctypes.WinDLL("user32", use_last_error=True)
+HWND = wintypes.HWND
+user32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
+user32.FindWindowW.restype = HWND
+user32.FindWindowExW.argtypes = [HWND, HWND, wintypes.LPCWSTR, wintypes.LPCWSTR]
+user32.FindWindowExW.restype = HWND
+user32.GetWindow.argtypes = [HWND, wintypes.UINT]
+user32.GetWindow.restype = HWND
+user32.SetParent.argtypes = [HWND, HWND]
+user32.SetParent.restype = HWND
+user32.SendMessageTimeoutW.argtypes = [HWND, wintypes.UINT, wintypes.WPARAM,
+                                       wintypes.LPARAM, wintypes.UINT,
+                                       wintypes.UINT, ctypes.POINTER(ctypes.c_size_t)]
+user32.EnumWindows.argtypes = [ctypes.WINFUNCTYPE(wintypes.BOOL, HWND, wintypes.LPARAM),
+                               wintypes.LPARAM]
+user32.EnumWindows.restype = wintypes.BOOL
+user32.SetWindowPos.argtypes = [HWND, HWND, ctypes.c_int, ctypes.c_int,
+                                ctypes.c_int, ctypes.c_int, wintypes.UINT]
+user32.SetWindowPos.restype = wintypes.BOOL
+
 GWL_STYLE = -16
-WS_CHILD = 0x40000000
-WS_POPUP = 0x80000000
-WS_VISIBLE = 0x10000000
+WS_CHILD, WS_POPUP, WS_VISIBLE = 0x40000000, 0x80000000, 0x10000000
 GW_HWNDNEXT = 2
+SWP_NOZORDER, SWP_NOACTIVATE, SWP_FRAMECHANGED = 0x0004, 0x0010, 0x0020
 
-def desktop_worker():
+if ctypes.sizeof(ctypes.c_void_p) == 8:
+    get_window_long = user32.GetWindowLongPtrW
+    set_window_long = user32.SetWindowLongPtrW
+    get_window_long.restype = ctypes.c_ssize_t
+    set_window_long.restype = ctypes.c_ssize_t
+else:
+    get_window_long = user32.GetWindowLongW
+    set_window_long = user32.SetWindowLongW
+    get_window_long.restype = ctypes.c_long
+    set_window_long.restype = ctypes.c_long
+get_window_long.argtypes = [HWND, ctypes.c_int]
+set_window_long.argtypes = [HWND, ctypes.c_int, ctypes.c_ssize_t]
+
+def find_desktop_layer():
     progman = user32.FindWindowW("Progman", None)
-    result = ctypes.c_ulong()
-    user32.SendMessageTimeoutW(progman, 0x052C, 0, 0, 0, 1000, ctypes.byref(result))
-    worker = None
-    enum_proc_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
-    def visit(hwnd, _):
-        nonlocal worker
-        shell = user32.FindWindowExW(hwnd, 0, "SHELLDLL_DefView", None)
-        if shell:
-            worker = user32.GetWindow(hwnd, GW_HWNDNEXT)
+    result = ctypes.c_size_t()
+    user32.SendMessageTimeoutW(progman, 0x052C, 0, 0, 0, 1000,
+                               ctypes.byref(result))
+    found = [None]
+    callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, HWND, wintypes.LPARAM)
+
+    def enum_callback(hwnd, _):
+        view = user32.FindWindowExW(hwnd, None, "SHELLDLL_DefView", None)
+        if view:
+            found[0] = user32.GetWindow(hwnd, GW_HWNDNEXT)
             return False
         return True
-    user32.EnumWindows(enum_proc_type(visit), 0)
-    return worker or progman
+
+    user32.EnumWindows(callback_type(enum_callback), 0)
+    return found[0] or progman
 
 class DesktopMonitor:
     def __init__(self):
@@ -46,84 +71,90 @@ class DesktopMonitor:
         self.root.title("RAM Monitor Desktop Widget")
         self.root.overrideredirect(True)
         self.root.configure(bg=BG)
-        self.root.attributes("-alpha", 0.92)
-        self.root.geometry(f"270x190+{X}+{Y}")
+        self.root.attributes("-alpha", 0.94)
+        self.root.geometry(f"{WIDTH}x{HEIGHT}+{X}+{Y}")
         self.root.resizable(False, False)
 
-        outer = tk.Frame(self.root, bg=BG, highlightthickness=1, highlightbackground="#344653")
-        outer.pack(fill="both", expand=True)
-        header = tk.Frame(outer, bg=BG)
-        header.pack(fill="x", padx=14, pady=(11, 5))
+        panel = tk.Frame(self.root, bg=BG, highlightthickness=1,
+                         highlightbackground="#344653")
+        panel.pack(fill="both", expand=True)
+        header = tk.Frame(panel, bg=BG)
+        header.pack(fill="x", padx=15, pady=(12, 7))
         tk.Label(header, text="SYSTEM MONITOR", bg=BG, fg=FG,
                  font=("Segoe UI", 9, "bold")).pack(side="left")
         tk.Label(header, text="● LIVE", bg=BG, fg=ACCENT,
                  font=("Segoe UI", 8, "bold")).pack(side="right")
 
         self.rows = {}
-        for key, label in (("ram", "MEMORY"), ("cpu", "PROCESSOR")):
-            block = tk.Frame(outer, bg=BG)
-            block.pack(fill="x", padx=14, pady=5)
-            line = tk.Frame(block, bg=BG)
+        for key, title in (("ram", "MEMORY"), ("cpu", "PROCESSOR")):
+            section = tk.Frame(panel, bg=BG)
+            section.pack(fill="x", padx=15, pady=5)
+            line = tk.Frame(section, bg=BG)
             line.pack(fill="x")
-            tk.Label(line, text=label, bg=BG, fg=MUTED,
+            tk.Label(line, text=title, bg=BG, fg=MUTED,
                      font=("Segoe UI", 8, "bold")).pack(side="left")
-            value = tk.Label(line, text="…", bg=BG, fg=FG,
+            value = tk.Label(line, text="Reading…", bg=BG, fg=FG,
                              font=("Segoe UI", 9, "bold"))
             value.pack(side="right")
-            bar = tk.Canvas(block, height=6, bg=BAR_BG, highlightthickness=0)
+            bar = tk.Canvas(section, height=6, bg=BAR_BG, highlightthickness=0)
             bar.pack(fill="x", pady=(5, 0))
             self.rows[key] = (value, bar)
 
-        self.detail = tk.Label(outer, text="Available memory: —",
-                               bg=BG, fg=MUTED, font=("Segoe UI", 8))
-        self.detail.pack(anchor="w", padx=14, pady=(5, 0))
-        self.footer = tk.Label(outer, text="Right-click for options",
-                               bg=BG, fg="#718391", font=("Segoe UI", 7))
-        self.footer.pack(anchor="w", padx=14, pady=(3, 9))
+        self.available = tk.Label(panel, text="Available memory: —",
+                                  bg=BG, fg=MUTED, font=("Segoe UI", 8))
+        self.available.pack(anchor="w", padx=15, pady=(5, 0))
+        tk.Label(panel, text="Right-click for options", bg=BG, fg="#718391",
+                 font=("Segoe UI", 7)).pack(anchor="w", padx=15, pady=(4, 9))
 
         menu = tk.Menu(self.root, tearoff=0)
-        menu.add_command(label="Refresh now", command=self.update)
+        menu.add_command(label="Refresh now", command=self.refresh)
+        menu.add_separator()
         menu.add_command(label="Exit", command=self.root.destroy)
-        self.root.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
-        for child in self.root.winfo_children():
-            child.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
-        self.root.after(400, self.attach_to_desktop)
-        self.update()
+        self.root.bind("<Button-3>", lambda event: self.show_menu(menu, event))
+        self.root.after(500, self.attach_to_desktop)
+        self.refresh()
+
+    @staticmethod
+    def show_menu(menu, event):
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
 
     def attach_to_desktop(self):
         hwnd = self.root.winfo_id()
-        parent = desktop_worker()
+        parent = find_desktop_layer()
         if parent:
             user32.SetParent(hwnd, parent)
-            get_long = getattr(user32, "GetWindowLongPtrW", user32.GetWindowLongW)
-            set_long = getattr(user32, "SetWindowLongPtrW", user32.SetWindowLongW)
-            get_long.restype = ctypes.c_ssize_t
-            set_long.restype = ctypes.c_ssize_t
-            style = get_long(hwnd, GWL_STYLE)
-            style = (style | WS_CHILD | WS_VISIBLE) & ~WS_POPUP
-            set_long(hwnd, GWL_STYLE, style)
-            user32.SetWindowPos(hwnd, 0, X, Y, 270, 190, 0x0010 | 0x0040)
+            style = get_window_long(hwnd, GWL_STYLE)
+            set_window_long(hwnd, GWL_STYLE,
+                            (style | WS_CHILD | WS_VISIBLE) & ~WS_POPUP)
+            user32.SetWindowPos(hwnd, None, X, Y, WIDTH, HEIGHT,
+                                SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED)
 
-    def set_bar(self, canvas, percent):
+    def draw_bar(self, canvas, percent):
         canvas.delete("all")
         width = max(1, canvas.winfo_width())
         canvas.create_rectangle(0, 0, width, 6, fill=BAR_BG, outline="")
         fill = int(width * max(0, min(100, percent)) / 100)
-        canvas.create_rectangle(0, 0, fill, 6, fill=ACCENT, outline="")
+        if fill:
+            canvas.create_rectangle(0, 0, fill, 6, fill=ACCENT, outline="")
 
-    def update(self):
+    def refresh(self):
         try:
-            mem = psutil.virtual_memory()
+            memory = psutil.virtual_memory()
             cpu = psutil.cpu_percent(interval=None)
-            self.rows["ram"][0].config(text=f"{mem.percent:.0f}%  ·  {mem.used / 1024**3:.1f} / {mem.total / 1024**3:.1f} GB")
+            self.rows["ram"][0].config(
+                text=f"{memory.percent:.0f}%  ·  {memory.used / 1024**3:.1f} / {memory.total / 1024**3:.1f} GB")
             self.rows["cpu"][0].config(text=f"{cpu:.0f}%")
-            self.detail.config(text=f"Available memory: {mem.available / 1024**3:.1f} GB")
+            self.available.config(
+                text=f"Available memory: {memory.available / 1024**3:.1f} GB")
             self.root.update_idletasks()
-            self.set_bar(self.rows["ram"][1], mem.percent)
-            self.set_bar(self.rows["cpu"][1], cpu)
-        except Exception:
+            self.draw_bar(self.rows["ram"][1], memory.percent)
+            self.draw_bar(self.rows["cpu"][1], cpu)
+        except (psutil.Error, tk.TclError):
             pass
-        self.root.after(2000, self.update)
+        self.root.after(2000, self.refresh)
 
     def run(self):
         self.root.mainloop()
