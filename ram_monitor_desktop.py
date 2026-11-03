@@ -95,9 +95,13 @@ class DesktopMonitor:
         parent = desktop_worker()
         if parent:
             user32.SetParent(hwnd, parent)
-            style = user32.GetWindowLongW(hwnd, GWL_STYLE)
+            get_long = getattr(user32, "GetWindowLongPtrW", user32.GetWindowLongW)
+            set_long = getattr(user32, "SetWindowLongPtrW", user32.SetWindowLongW)
+            get_long.restype = ctypes.c_ssize_t
+            set_long.restype = ctypes.c_ssize_t
+            style = get_long(hwnd, GWL_STYLE)
             style = (style | WS_CHILD | WS_VISIBLE) & ~WS_POPUP
-            user32.SetWindowLongW(hwnd, GWL_STYLE, style)
+            set_long(hwnd, GWL_STYLE, style)
             user32.SetWindowPos(hwnd, 0, X, Y, 270, 190, 0x0010 | 0x0040)
 
     def set_bar(self, canvas, percent):
