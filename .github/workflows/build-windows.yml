@@ -1,0 +1,49 @@
+name: Build RAM Monitor for Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Extract source archive
+        shell: pwsh
+        run: |
+          $encoded = (Get-Content -Raw "RAMMonitor-source.zip.b64").Trim()
+          $bytes = [Convert]::FromBase64String($encoded)
+          $archive = Join-Path $env:RUNNER_TEMP "RAMMonitor-source.zip"
+          [System.IO.File]::WriteAllBytes($archive, $bytes)
+          Expand-Archive -LiteralPath $archive -DestinationPath "$env:GITHUB_WORKSPACE\source" -Force
+
+      - name: Install dependencies
+        working-directory: source
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
+
+      - name: Build standalone EXE
+        working-directory: source
+        run: |
+          python -m PyInstaller --noconfirm --clean --windowed --onefile --name RAMMonitor --collect-all pystray --collect-all PIL ram_monitor.py
+
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: RAMMonitor-Windows
+          path: source/dist/RAMMonitor.exe
+          if-no-files-found: error
