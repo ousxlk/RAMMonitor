@@ -216,6 +216,10 @@ class DesktopMonitor:
         self.menu.add_command(label="Exit", command=self.root.destroy)
 
         self.bind_drag_tree(header)
+        # Track the drag globally within this Tk app so the pointer can leave
+        # the header while the widget continues following it.
+        self.root.bind_all("<B1-Motion>", self.drag_widget, add="+")
+        self.root.bind_all("<ButtonRelease-1>", self.stop_drag, add="+")
         self.root.bind("<Button-3>", self.show_menu)
         self.root.after(700, self.attach_to_desktop)
         self.refresh()
@@ -237,8 +241,6 @@ class DesktopMonitor:
     def bind_drag_tree(self, widget):
         # Bind all header descendants, including labels.
         widget.bind("<ButtonPress-1>", self.start_drag, add="+")
-        widget.bind("<B1-Motion>", self.drag_widget, add="+")
-        widget.bind("<ButtonRelease-1>", self.stop_drag, add="+")
         for child in widget.winfo_children():
             self.bind_drag_tree(child)
 
@@ -254,7 +256,6 @@ class DesktopMonitor:
             return
         self.drag_origin = (event.x_root, event.y_root, point.x, point.y)
         self.dragging = True
-        user32.SetCapture(self.root.winfo_id())
 
     def drag_widget(self, event):
         if not self.dragging or not self.drag_origin or not self.desktop_parent:
@@ -267,8 +268,6 @@ class DesktopMonitor:
             self.position = [nx, ny]
 
     def stop_drag(self, _event):
-        if self.dragging:
-            user32.ReleaseCapture()
         self.dragging = False
         self.drag_origin = None
 
