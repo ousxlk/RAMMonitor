@@ -45,6 +45,13 @@ user32.SetWindowPos.argtypes = [
     wintypes.UINT
 ]
 user32.SetWindowPos.restype = wintypes.BOOL
+user32.SetCapture.argtypes = [HWND]
+user32.SetCapture.restype = HWND
+user32.ReleaseCapture.restype = wintypes.BOOL
+user32.GetWindowRect.argtypes = [HWND, ctypes.POINTER(wintypes.RECT)]
+user32.GetWindowRect.restype = wintypes.BOOL
+user32.ScreenToClient.argtypes = [HWND, ctypes.POINTER(wintypes.POINT)]
+user32.ScreenToClient.restype = wintypes.BOOL
 kernel32.GetCurrentProcess.restype = wintypes.HANDLE
 psapi.EmptyWorkingSet.argtypes = [wintypes.HANDLE]
 psapi.EmptyWorkingSet.restype = wintypes.BOOL
@@ -102,6 +109,7 @@ class DesktopMonitor:
         self.position = [X, Y]
         self.drag_origin = None
         self.dragging = False
+        self.desktop_parent = None
         self.status_job = None
 
         outer = tk.Frame(
@@ -205,11 +213,7 @@ class DesktopMonitor:
         self.menu.add_separator()
         self.menu.add_command(label="Exit", command=self.root.destroy)
 
-        for widget in (header, title_area, *header.winfo_children(),
-                       *title_area.winfo_children()):
-            widget.bind("<ButtonPress-1>", self.start_drag, add="+")
-            widget.bind("<B1-Motion>", self.drag_widget, add="+")
-            widget.bind("<ButtonRelease-1>", self.stop_drag, add="+")
+        self.bind_drag_tree(header)
         self.root.bind("<Button-3>", self.show_menu)
         self.root.after(700, self.attach_to_desktop)
         self.refresh()
@@ -228,25 +232,41 @@ class DesktopMonitor:
         card.value_label = number
         return card
 
+    def bind_drag_tree(self, widget):
+        # Bind all header descendants, including labels.
+        widget.bind("<ButtonPress-1>", self.start_drag, add="+")
+        widget.bind("<B1-Motion>", self.drag_widget, add="+")
+        widget.bind("<ButtonRelease-1>", self.stop_drag, add="+")
+        for child in widget.winfo_children():
+            self.bind_drag_tree(child)
+
     def start_drag(self, event):
-        self.drag_origin = (
-            event.x_root, event.y_root, self.position[0], self.position[1]
-        )
+        parent = self.desktop_parent
+        if not parent:
+            return
+        rect = wintypes.RECT()
+        if not user32.GetWindowRect(self.root.winfo_id(), ctypes.byref(rect)):
+            return
+        point = wintypes.POINT(rect.left, rect.top)
+        if not user32.ScreenToClient(parent, ctypes.byref(point)):
+            return
+        self.drag_origin = (event.x_root, event.y_root, point.x, point.y)
         self.dragging = True
+        user32.SetCapture(self.root.winfo_id())
 
     def drag_widget(self, event):
-        if not self.dragging or not self.drag_origin:
+        if not self.dragging or not self.drag_origin or not self.desktop_parent:
             return
         sx, sy, ox, oy = self.drag_origin
-        nx = max(0, ox + event.x_root - sx)
-        ny = max(0, oy + event.y_root - sy)
-        if user32.SetWindowPos(
-            self.root.winfo_id(), None, nx, ny, WIDTH, HEIGHT,
-            SWP_NOZORDER | SWP_NOACTIVATE
-        ):
+        nx = ox + event.x_root - sx
+        ny = oy + event.y_root - sy
+        if user32.SetWindowPos(self.root.winfo_id(), None, nx, ny, WIDTH, HEIGHT,
+                               SWP_NOZORDER | SWP_NOACTIVATE):
             self.position = [nx, ny]
 
     def stop_drag(self, _event):
+        if self.dragging:
+            user32.ReleaseCapture()
         self.dragging = False
         self.drag_origin = None
 
@@ -263,6 +283,7 @@ class DesktopMonitor:
             self.set_status("Desktop layer unavailable — widget remains open")
             return
         user32.SetParent(hwnd, parent)
+        self.desktop_parent = parent
         style = get_window_long(hwnd, GWL_STYLE)
         set_window_long(
             hwnd, GWL_STYLE, (style | WS_CHILD | WS_VISIBLE) & ~WS_POPUP
