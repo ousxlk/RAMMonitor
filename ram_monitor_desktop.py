@@ -74,6 +74,8 @@ class DesktopMonitor:
         self.root.attributes("-alpha", 0.94)
         self.root.geometry(f"{WIDTH}x{HEIGHT}+{X}+{Y}")
         self.root.resizable(False, False)
+        self.position = [X, Y]
+        self.drag_origin = None
 
         panel = tk.Frame(self.root, bg=BG, highlightthickness=1,
                          highlightbackground="#344653")
@@ -103,7 +105,7 @@ class DesktopMonitor:
         self.available = tk.Label(panel, text="Available memory: —",
                                   bg=BG, fg=MUTED, font=("Segoe UI", 8))
         self.available.pack(anchor="w", padx=15, pady=(5, 0))
-        tk.Label(panel, text="Right-click for options", bg=BG, fg="#718391",
+        tk.Label(panel, text="Drag to move  ·  Right-click for options", bg=BG, fg="#718391",
                  font=("Segoe UI", 7)).pack(anchor="w", padx=15, pady=(4, 9))
 
         menu = tk.Menu(self.root, tearoff=0)
@@ -111,8 +113,30 @@ class DesktopMonitor:
         menu.add_separator()
         menu.add_command(label="Exit", command=self.root.destroy)
         self.root.bind("<Button-3>", lambda event: self.show_menu(menu, event))
+        self.bind_drag(self.root)
         self.root.after(500, self.attach_to_desktop)
         self.refresh()
+
+    def bind_drag(self, widget):
+        # Bind the whole widget surface so it can be moved from any blank area.
+        widget.bind("<ButtonPress-1>", self.start_drag, add="+")
+        widget.bind("<B1-Motion>", self.drag_widget, add="+")
+        for child in widget.winfo_children():
+            self.bind_drag(child)
+
+    def start_drag(self, event):
+        self.drag_origin = (event.x_root, event.y_root,
+                            self.position[0], self.position[1])
+
+    def drag_widget(self, event):
+        if not self.drag_origin:
+            return
+        sx, sy, ox, oy = self.drag_origin
+        nx, ny = ox + event.x_root - sx, oy + event.y_root - sy
+        hwnd = self.root.winfo_id()
+        if user32.SetWindowPos(hwnd, None, nx, ny, WIDTH, HEIGHT,
+                               SWP_NOZORDER | SWP_NOACTIVATE):
+            self.position = [nx, ny]
 
     @staticmethod
     def show_menu(menu, event):
